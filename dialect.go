@@ -74,7 +74,7 @@ func genericInsert(db DbIsh, table, sqlIdFieldName string, obj FieldEnumerator) 
 
 	for i, field := range objFields {
 		// If there's an id field, skip it so it can be automatically assigned.
-		if field != sqlIdFieldName {
+		if field != sqlIdFieldName && field[0:2] != "XX" {
 			sqlValues = append(sqlValues, objValues[i])
 			sqlFields = append(sqlFields, field)
 			placeholders = append(placeholders, fmt.Sprintf("$%d", len(sqlValues)))
@@ -82,7 +82,7 @@ func genericInsert(db DbIsh, table, sqlIdFieldName string, obj FieldEnumerator) 
 	}
 
 	q := `
-		INSERT INTO %s 
+		INSERT INTO %s
 		(%s)
 		VALUES (%s)
 	`
@@ -117,7 +117,7 @@ func genericUpdate(db DbIsh, table, sqlIdFieldName string, obj FieldEnumerator) 
 		if field == sqlIdFieldName {
 			idValue = objValues[i]
 
-		} else {
+		} else if field[0:2] != "XX" {
 			sqlValues = append(sqlValues, objValues[i])
 			sqlFields = append(sqlFields, fmt.Sprintf("%s = $%d", field, len(sqlValues)))
 		}
