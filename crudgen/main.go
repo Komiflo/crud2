@@ -35,7 +35,7 @@ func (structType StructType) Metadata() string {
 
 	bs := &bytes.Buffer{}
 
-	if er := structTemplate.Execute(bs, structType); er != nil {
+	if er := structTemplateFull.Execute(bs, structType); er != nil {
 		panic(er)
 	}
 
@@ -118,7 +118,7 @@ func buildStructType(structType *StructType, astStruct *ast.StructType, prefix s
 						panic("'recurse' field isn't a struct")
 					}
 
-					buildStructType(structType, st, prefix + name + ".")
+					buildStructType(structType, st, prefix+name+".")
 				}
 			}
 
