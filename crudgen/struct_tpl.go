@@ -55,7 +55,7 @@ const bindFuncStr = `
 func (self *{{.Name}}) BindFields(names []string, values []interface{}) {
 	for i, name := range names {
 		switch name {
-{{range.Fields}}
+{{range.BoundFields}}
 		case {{quote .SqlName}}:
 			values[i] = &self.{{.Name}}
 {{end}}
@@ -66,9 +66,9 @@ func (self *{{.Name}}) BindFields(names []string, values []interface{}) {
 const enumerateFuncStr = `
 // EnumerateFields implements crud.FieldEnumerator
 func (self *{{.Name}}) EnumerateFields() (names []string, values []interface{}) {
-	names = make([]string, 0, {{length .Fields}})
-	values = make([]interface{}, 0, {{length .Fields}})
-{{range .Fields}}
+	names = make([]string, 0, {{length .EnumeratedFields}})
+	values = make([]interface{}, 0, {{length .EnumeratedFields}})
+{{range .EnumeratedFields}}
 	names = append(names, {{quote .SqlName}})
 	values = append(values, {{if .EnumAddr}}&{{end}}self.{{.Name}})
 {{end}}

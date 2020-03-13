@@ -24,18 +24,25 @@ type StructType struct {
 	TypeSpec   *ast.TypeSpec
 	StructType *ast.StructType
 
-	Name   string
-	Fields StructFieldList
+	Name             string
+	BoundFields      StructFieldList
+	EnumeratedFields StructFieldList
 }
 
 func (structType StructType) Metadata() string {
-	if len(structType.Fields) == 0 {
+	if len(structType.BoundFields) == 0 && len(structType.EnumeratedFields) == 0 {
 		return ""
 	}
 
 	bs := &bytes.Buffer{}
 
-	if er := structTemplateFull.Execute(bs, structType); er != nil {
+	var er error
+	if len(structType.EnumeratedFields) == 0 {
+		er = structTemplateROnly.Execute(bs, structType)
+	} else {
+		er = structTemplateFull.Execute(bs, structType)
+	}
+	if er != nil {
 		panic(er)
 	}
 
@@ -71,6 +78,15 @@ func fileFilter(fi os.FileInfo) bool {
 	return fi.Name() != outputFilename
 }
 
+func contains(s []string, t string) bool {
+	for _, e := range s {
+		if e == t {
+			return true
+		}
+	}
+	return false
+}
+
 func buildStructType(structType *StructType, astStruct *ast.StructType, prefix string) {
 	for _, field := range astStruct.Fields.List {
 		if field.Tag == nil {
@@ -92,14 +108,22 @@ func buildStructType(structType *StructType, astStruct *ast.StructType, prefix s
 		rtags := reflect.StructTag(tagList)
 
 		if tag := rtags.Get(structTagName); tag != "" {
-			tagList := strings.Split(tag, ",")
+			var nameTag string
+			var optionTags []string
+			for i, s := range strings.Split(tag, ",") {
+				if i == 0 {
+					nameTag = s
+				} else {
+					optionTags = append(optionTags, s)
+				}
+			}
 
-			if len(tagList) == 0 || tagList[0] == "" {
+			if nameTag == "" {
 				// NB: Intentionally skip entries like `,recurse`.
 				continue
 			}
 
-			if tagList[1] == "recurse" {
+			if contains(optionTags, "recurse") {
 				// The "recurse" flag is valid only on structs, and
 				// indicates that all fields of the tagged struct
 				// should be included as well.
@@ -125,15 +149,24 @@ func buildStructType(structType *StructType, astStruct *ast.StructType, prefix s
 				buildStructType(structType, st, prefix+name+".")
 			}
 
-			structType.Fields = append(structType.Fields, StructField{
+			if !contains(optionTags, "ronly") {
+				structType.EnumeratedFields = append(structType.EnumeratedFields, StructField{
+					Name:    prefix + name,
+					SqlName: nameTag,
+					Type:    field.Type,
+				})
+			}
+
+			structType.BoundFields = append(structType.BoundFields, StructField{
 				Name:    prefix + name,
-				SqlName: tagList[0],
+				SqlName: nameTag,
 				Type:    field.Type,
 			})
 		}
 	}
 
-	sort.Sort(structType.Fields)
+	sort.Sort(structType.BoundFields)
+	sort.Sort(structType.EnumeratedFields)
 }
 
 func main() {
