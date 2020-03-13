@@ -107,62 +107,59 @@ func buildStructType(structType *StructType, astStruct *ast.StructType, prefix s
 
 		rtags := reflect.StructTag(tagList)
 
-		if tag := rtags.Get(structTagName); tag != "" {
-			var nameTag string
-			var optionTags []string
-			for i, s := range strings.Split(tag, ",") {
-				if i == 0 {
-					nameTag = s
-				} else {
-					optionTags = append(optionTags, s)
-				}
+		var nameTag string
+		var optionTags []string
+		for i, s := range strings.Split(rtags.Get(structTagName), ",") {
+			if i == 0 {
+				nameTag = s
+			} else {
+				optionTags = append(optionTags, s)
+			}
+		}
+
+		if nameTag == "" {
+			continue
+		}
+
+		if contains(optionTags, "recurse") {
+			// The "recurse" flag is valid only on structs, and
+			// indicates that all fields of the tagged struct
+			// should be included as well.
+			// XXX: This is a bit of a mess.
+			ident, ok := field.Type.(*ast.Ident)
+			if !ok {
+				panic("'recurse' Field type is not an ast.Ident?")
+			}
+			if ident.Obj == nil || ident.Obj.Decl == nil {
+				panic("'recurse' Field type doesn't refer to an object")
 			}
 
-			if nameTag == "" {
-				// NB: Intentionally skip entries like `,recurse`.
-				continue
+			ts, ok := ident.Obj.Decl.(*ast.TypeSpec)
+			if !ok || ts.Type == nil {
+				panic("'recurse' Field type declaration doesn't ... have ... a TypeSpec?")
 			}
 
-			if contains(optionTags, "recurse") {
-				// The "recurse" flag is valid only on structs, and
-				// indicates that all fields of the tagged struct
-				// should be included as well.
-				// XXX: This is a bit of a mess.
-				ident, ok := field.Type.(*ast.Ident)
-				if !ok {
-					panic("'recurse' Field type is not an ast.Ident?")
-				}
-				if ident.Obj == nil || ident.Obj.Decl == nil {
-					panic("'recurse' Field type doesn't refer to an object")
-				}
-
-				ts, ok := ident.Obj.Decl.(*ast.TypeSpec)
-				if !ok || ts.Type == nil {
-					panic("'recurse' Field type declaration doesn't ... have ... a TypeSpec?")
-				}
-
-				st, ok := ts.Type.(*ast.StructType)
-				if !ok {
-					panic("'recurse' field isn't a struct")
-				}
-
-				buildStructType(structType, st, prefix+name+".")
+			st, ok := ts.Type.(*ast.StructType)
+			if !ok {
+				panic("'recurse' field isn't a struct")
 			}
 
-			if !contains(optionTags, "ronly") {
-				structType.EnumeratedFields = append(structType.EnumeratedFields, StructField{
-					Name:    prefix + name,
-					SqlName: nameTag,
-					Type:    field.Type,
-				})
-			}
+			buildStructType(structType, st, prefix+name+".")
+		}
 
-			structType.BoundFields = append(structType.BoundFields, StructField{
+		if !contains(optionTags, "ronly") {
+			structType.EnumeratedFields = append(structType.EnumeratedFields, StructField{
 				Name:    prefix + name,
 				SqlName: nameTag,
 				Type:    field.Type,
 			})
 		}
+
+		structType.BoundFields = append(structType.BoundFields, StructField{
+			Name:    prefix + name,
+			SqlName: nameTag,
+			Type:    field.Type,
+		})
 	}
 
 	sort.Sort(structType.BoundFields)
