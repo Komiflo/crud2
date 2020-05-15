@@ -13,7 +13,7 @@ var tplFuncs = map[string]interface{}{
 	"quote": strconv.Quote,
 }
 
-const structTemplateStr = `
+const fetchFuncStr = `
 func fetch{{.Name}}(db crud.DbIsh, q string, args ...interface{}) (out *{{.Name}}) {
 	rows, er := db.Query(q, args...)
 	if er != nil {
@@ -27,10 +27,10 @@ func fetch{{.Name}}(db crud.DbIsh, q string, args ...interface{}) (out *{{.Name}
 			panic(er)
 		}
 	}
-
 	return
 }
-
+`
+const fetchSliceFuncStr = `
 func fetch{{.Name}}Slice(db crud.DbIsh, q string, args ...interface{}) (out []*{{.Name}}) {
 	rows, er := db.Query(q, args...)
 	if er != nil {
@@ -47,25 +47,28 @@ func fetch{{.Name}}Slice(db crud.DbIsh, q string, args ...interface{}) (out []*{
 		}
 		out = append(out, c)
 	}
-
 	return
 }
-
+`
+const bindFuncStr = `
+// BindFields implements crud.FieldBinder
 func (self *{{.Name}}) BindFields(names []string, values []interface{}) {
 	for i, name := range names {
 		switch name {
-{{range.Fields}}
+{{range.BoundFields}}
 		case {{quote .SqlName}}:
 			values[i] = &self.{{.Name}}
 {{end}}
 		}
 	}
 }
-
+`
+const enumerateFuncStr = `
+// EnumerateFields implements crud.FieldEnumerator
 func (self *{{.Name}}) EnumerateFields() (names []string, values []interface{}) {
-	names = make([]string, 0, {{length .Fields}})
-	values = make([]interface{}, 0, {{length .Fields}})
-{{range .Fields}}
+	names = make([]string, 0, {{length .EnumeratedFields}})
+	values = make([]interface{}, 0, {{length .EnumeratedFields}})
+{{range .EnumeratedFields}}
 	names = append(names, {{quote .SqlName}})
 	values = append(values, {{if .EnumAddr}}&{{end}}self.{{.Name}})
 {{end}}
@@ -73,4 +76,10 @@ func (self *{{.Name}}) EnumerateFields() (names []string, values []interface{}) 
 }
 `
 
-var structTemplate = template.Must(template.New("").Funcs(tplFuncs).Parse(structTemplateStr))
+var structTemplateFull = template.Must(template.New("").Funcs(tplFuncs).Parse(
+	fetchFuncStr + fetchSliceFuncStr + bindFuncStr + enumerateFuncStr,
+))
+
+var structTemplateROnly = template.Must(template.New("").Funcs(tplFuncs).Parse(
+	fetchFuncStr + fetchSliceFuncStr + bindFuncStr,
+))
