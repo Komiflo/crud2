@@ -2,9 +2,10 @@ package crud
 
 import (
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
 	"testing"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Foo struct {
@@ -38,6 +39,11 @@ type ModifiedFoo struct {
 	Num  int64     `crud:"foo_num"`
 	Str  string    `crud:"foo_str"`
 	Time time.Time `crud:"foo_time"`
+}
+
+type FooWithExtra struct {
+	Foo
+	ExtraID int64 `crud:"extra_id,ronly"`
 }
 
 func (foo *ModifiedFoo) CrudDeflate() error {
@@ -167,7 +173,7 @@ func TestSingleFoo(t *testing.T) {
 	}
 
 	if f.Str != f2.Str {
-		t.Errorf("Scan mismatch, Str: %d != %d", f.Str, f2.Str)
+		t.Errorf("Scan mismatch, Str: %s != %s", f.Str, f2.Str)
 	}
 
 	if !f.Time.Equal(f2.Time) {
@@ -677,5 +683,58 @@ func TestInflateDeflate(t *testing.T) {
 
 	if fout.Num != 21 {
 		t.Errorf("Second round trip failed: got %d", fout.Num)
+	}
+}
+
+func TestFooWithExtra(t *testing.T) {
+	db, er := createDb()
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer db.Close()
+
+	_, er = db.Exec(`
+		CREATE TABLE foo_extra
+			( foo_id INTEGER PRIMARY KEY AUTOINCREMENT
+			, foo_num INTEGER NOT NULL
+			, foo_str VARCHAR(34) NOT NULL
+			, foo_time TIMESTAMP NOT NULL
+			, extra_id INTEGER NOT NULL
+			);
+	`)
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	f := newFoo()
+	f.Id, er = Insert(db, "foo", "foo_id", f)
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	_, er = db.Exec(
+		`INSERT INTO foo_extra (foo_id, foo_num, foo_str, foo_time, extra_id) VALUES (?, ?, ?, ?, ?)`,
+		f.Id, f.Num, f.Str, f.Time, 99,
+	)
+	if er != nil {
+		t.Fatal(er)
+	}
+
+	var out FooWithExtra
+	rows, er := db.Query("SELECT * FROM foo_extra")
+	if er != nil {
+		t.Fatal(er)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		t.Fatal("expected one row")
+	}
+	if er := Scan(rows, &out); er != nil {
+		t.Fatal(er)
+	}
+
+	if out.Id != f.Id || out.Num != f.Num || out.Str != f.Str || out.ExtraID != 99 {
+		t.Errorf("Scan mismatch: got %+v, want Id=%d Num=%d Str=%s ExtraID=99", out, f.Id, f.Num, f.Str)
 	}
 }

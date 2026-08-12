@@ -41,6 +41,32 @@ func (self *Foo) EnumerateFields() (names []string, values []interface{}) {
 	return
 }
 
+func (self *FooWithExtra) BindFields(names []string, values []interface{}) {
+	remainingNames := make([]string, 0, len(names))
+	remainingIndices := make([]int, 0, len(names))
+	for i, name := range names {
+		switch name {
+
+		case "extra_id":
+			values[i] = &self.ExtraID
+
+		default:
+			remainingNames = append(remainingNames, name)
+			remainingIndices = append(remainingIndices, i)
+		}
+	}
+	if len(remainingNames) == 0 {
+		return
+	}
+	remainingValues := make([]interface{}, len(remainingNames))
+
+	self.Foo.BindFields(remainingNames, remainingValues)
+
+	for j, idx := range remainingIndices {
+		values[idx] = remainingValues[j]
+	}
+}
+
 func (self *OptionalFoo) BindFields(names []string, values []interface{}) {
 	for i, name := range names {
 		switch name {

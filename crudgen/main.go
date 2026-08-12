@@ -20,6 +20,10 @@ const (
 	structTagName  = "crud"
 )
 
+type EmbeddedType struct {
+	Name string
+}
+
 type StructType struct {
 	TypeSpec   *ast.TypeSpec
 	StructType *ast.StructType
@@ -27,19 +31,23 @@ type StructType struct {
 	Name             string
 	BoundFields      StructFieldList
 	EnumeratedFields StructFieldList
+	EmbeddedTypes    []EmbeddedType
 }
 
 func (structType StructType) Metadata() string {
-	if len(structType.BoundFields) == 0 && len(structType.EnumeratedFields) == 0 {
+	if len(structType.BoundFields) == 0 && len(structType.EnumeratedFields) == 0 && len(structType.EmbeddedTypes) == 0 {
 		return ""
 	}
 
 	bs := &bytes.Buffer{}
 
 	var er error
-	if len(structType.EnumeratedFields) == 0 {
+	switch {
+	case len(structType.EmbeddedTypes) > 0:
+		er = structTemplateEmbeddedComposite.Execute(bs, structType)
+	case len(structType.EnumeratedFields) == 0:
 		er = structTemplateROnly.Execute(bs, structType)
-	} else {
+	default:
 		er = structTemplateFull.Execute(bs, structType)
 	}
 	if er != nil {
@@ -87,14 +95,31 @@ func contains(s []string, t string) bool {
 	return false
 }
 
+func embeddedTypeName(expr ast.Expr) (string, bool) {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name, true
+	case *ast.StarExpr:
+		if id, ok := t.X.(*ast.Ident); ok {
+			return id.Name, true
+		}
+	}
+	return "", false
+}
+
 func buildStructType(structType *StructType, astStruct *ast.StructType, prefix string) {
 	for _, field := range astStruct.Fields.List {
-		if field.Tag == nil {
+		if len(field.Names) == 0 {
+			if prefix != "" {
+				continue
+			}
+			if name, ok := embeddedTypeName(field.Type); ok {
+				structType.EmbeddedTypes = append(structType.EmbeddedTypes, EmbeddedType{Name: name})
+			}
 			continue
 		}
 
-		if len(field.Names) == 0 {
-			// XXX: We may want to support anonymous fields in the future.
+		if field.Tag == nil {
 			continue
 		}
 

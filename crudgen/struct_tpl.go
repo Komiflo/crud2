@@ -63,6 +63,34 @@ func (self *{{.Name}}) BindFields(names []string, values []interface{}) {
 	}
 }
 `
+const bindEmbeddedCompositeFuncStr = `
+// BindFields implements crud.FieldBinder
+func (self *{{.Name}}) BindFields(names []string, values []interface{}) {
+	remainingNames := make([]string, 0, len(names))
+	remainingIndices := make([]int, 0, len(names))
+	for i, name := range names {
+		switch name {
+{{range .BoundFields}}
+		case {{quote .SqlName}}:
+			values[i] = &self.{{.Name}}
+{{end}}
+		default:
+			remainingNames = append(remainingNames, name)
+			remainingIndices = append(remainingIndices, i)
+		}
+	}
+	if len(remainingNames) == 0 {
+		return
+	}
+	remainingValues := make([]interface{}, len(remainingNames))
+{{range .EmbeddedTypes}}
+	self.{{.Name}}.BindFields(remainingNames, remainingValues)
+{{end}}
+	for j, idx := range remainingIndices {
+		values[idx] = remainingValues[j]
+	}
+}
+`
 const enumerateFuncStr = `
 // EnumerateFields implements crud.FieldEnumerator
 func (self *{{.Name}}) EnumerateFields() (names []string, values []interface{}) {
@@ -82,4 +110,8 @@ var structTemplateFull = template.Must(template.New("").Funcs(tplFuncs).Parse(
 
 var structTemplateROnly = template.Must(template.New("").Funcs(tplFuncs).Parse(
 	fetchFuncStr + fetchSliceFuncStr + bindFuncStr,
+))
+
+var structTemplateEmbeddedComposite = template.Must(template.New("").Funcs(tplFuncs).Parse(
+	fetchFuncStr + fetchSliceFuncStr + bindEmbeddedCompositeFuncStr,
 ))
